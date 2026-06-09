@@ -1,0 +1,244 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>MainWindow</class>
+ <widget class="QMainWindow" name="MainWindow">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>697</width>
+    <height>508</height>
+   </rect>
+  </property>
+  <property name="font">
+   <font>
+    <pointsize>12</pointsize>
+   </font>
+  </property>
+  <property name="windowTitle">
+   <string>MainWindow</string>
+  </property>
+  <widget class="QWidget" name="centralwidget">
+   <layout class="QVBoxLayout" name="verticalLayout">
+    <item>
+     <widget class="QSplitter" name="splitter_2">
+      <property name="orientation">
+       <enum>Qt::Orientation::Vertical</enum>
+      </property>
+      <widget class="QSplitter" name="splitter">
+       <property name="orientation">
+        <enum>Qt::Orientation::Horizontal</enum>
+       </property>
+       <widget class="EasyImageView" name="m_camViw" native="true">
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
+        <property name="minimumSize">
+         <size>
+          <width>150</width>
+          <height>0</height>
+         </size>
+        </property>
+       </widget>
+       <widget class="QWidget" name="">
+        <layout class="QVBoxLayout" name="verticalLayout_2">
+         <item>
+          <widget class="NavigationView" name="m_navView" native="true"/>
+         </item>
+         <item>
+          <widget class="QWidget" name="widget" native="true">
+           <property name="maximumSize">
+            <size>
+             <width>16777215</width>
+             <height>140</height>
+            </size>
+           </property>
+           <layout class="QGridLayout" name="gridLayout">
+            <item row="0" column="0" colspan="2">
+             <widget class="QCheckBox" name="cb_TubeCorrect">
+              <property name="text">
+               <string>Tube Correct</string>
+              </property>
+             </widget>
+            </item>
+            <item row="1" column="0">
+             <widget class="QLabel" name="label_4">
+              <property name="text">
+               <string>Tube Diametr:</string>
+              </property>
+             </widget>
+            </item>
+            <item row="1" column="1">
+             <widget class="QLineEdit" name="le_TubeDiametr">
+              <property name="text">
+               <string>420</string>
+              </property>
+             </widget>
+            </item>
+            <item row="1" column="2">
+             <widget class="QLabel" name="label_8">
+              <property name="text">
+               <string>mm</string>
+              </property>
+             </widget>
+            </item>
+            <item row="1" column="3">
+             <widget class="QLabel" name="label">
+              <property name="text">
+               <string>TextLabel</string>
+              </property>
+             </widget>
+            </item>
+            <item row="1" column="4">
+             <widget class="QDoubleSpinBox" name="spinBox_ScanOffset">
+              <property name="minimumSize">
+               <size>
+                <width>80</width>
+                <height>28</height>
+               </size>
+              </property>
+              <property name="minimum">
+               <double>-20.000000000000000</double>
+              </property>
+              <property name="maximum">
+               <double>20.000000000000000</double>
+              </property>
+              <property name="singleStep">
+               <double>0.500000000000000</double>
+              </property>
+             </widget>
+            </item>
+            <item row="2" column="0">
+             <widget class="QLabel" name="label_5">
+              <property name="text">
+               <string>Offset:</string>
+              </property>
+             </widget>
+            </item>
+            <item row="2" column="1">
+             <widget class="QLineEdit" name="le_Offset">
+              <property name="text">
+               <string>0</string>
+              </property>
+             </widget>
+            </item>
+            <item row="2" column="2">
+             <widget class="QLabel" name="label_11">
+              <property name="text">
+               <string>mm</string>
+              </property>
+             </widget>
+            </item>
+           </layout>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+      </widget>
+      <widget class="QTabWidget" name="tabWidget">
+       <property name="maximumSize">
+        <size>
+         <width>16777215</width>
+         <height>300</height>
+        </size>
+       </property>
+       <property name="currentIndex">
+        <number>-1</number>
+       </property>
+      </widget>
+     </widget>
+    </item>
+   </layout>
+  </widget>
+  <widget class="QMenuBar" name="menubar">
+   <property name="geometry">
+    <rect>
+     <x>0</x>
+     <y>0</y>
+     <width>697</width>
+     <height>27</height>
+    </rect>
+   </property>
+   <widget class="QMenu" name="menuCamera">
+    <property name="title">
+     <string>Camera</string>
+    </property>
+    <addaction name="actionCamera0"/>
+    <addaction name="actionCamera1"/>
+    <addaction name="actionCamera2"/>
+    <addaction name="actionCamera3"/>
+   </widget>
+   <widget class="QMenu" name="menuCalibration">
+    <property name="title">
+     <string>Calibration</string>
+    </property>
+    <addaction name="actionZero_Position_mode"/>
+    <addaction name="actionSet_zero_position"/>
+   </widget>
+   <addaction name="menuCamera"/>
+   <addaction name="menuCalibration"/>
+  </widget>
+  <widget class="QStatusBar" name="statusbar"/>
+  <action name="actionCamera0">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>Camera0</string>
+   </property>
+  </action>
+  <action name="actionCamera1">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>Camera1</string>
+   </property>
+  </action>
+  <action name="actionCamera2">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>Camera2</string>
+   </property>
+  </action>
+  <action name="actionCamera3">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>Camera3</string>
+   </property>
+  </action>
+  <action name="actionZero_Position_mode">
+   <property name="text">
+    <string>Zero Position mode</string>
+   </property>
+  </action>
+  <action name="actionSet_zero_position">
+   <property name="text">
+    <string>Set zero position</string>
+   </property>
+  </action>
+ </widget>
+ <customwidgets>
+  <customwidget>
+   <class>EasyImageView</class>
+   <extends>QWidget</extends>
+   <header location="global">apcamera/easyimageview.h</header>
+   <container>1</container>
+  </customwidget>
+  <customwidget>
+   <class>NavigationView</class>
+   <extends>QWidget</extends>
+   <header location="global">apcamera/navigationview.h</header>
+   <container>1</container>
+  </customwidget>
+ </customwidgets>
+ <resources/>
+ <connections/>
+</ui>
