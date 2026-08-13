@@ -11,10 +11,11 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 get_filename_component(PARENT_DIR "${CMAKE_SOURCE_DIR}" DIRECTORY)
 #путь к установкам камеры
-set(CAMERA_PARAMS "${PARENT_DIR}/settings/camera.xml")
+set(CAMERA_PARAMS  "${PARENT_DIR}/settings/camera.xml")
 add_compile_definitions(PATH_NAME_CAMERA_PARAMS_FILE="${CAMERA_PARAMS}")
 set(DETECT_PARAMS "${PARENT_DIR}/settings/obj_params.xml")
 add_compile_definitions(PATH_NAME_AUTOPILOT_PARAMS_FILE="${DETECT_PARAMS}")
+add_compile_definitions(PATH_NAME_FACE_MODELS_DIR="${PARENT_DIR}/settings")
 
 #Opencv собирается как динмаическая билиотека
 add_definitions(-DOPENCV_LINK_AS_SHARED)
@@ -55,8 +56,12 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
         apcamera/frametapesetzeropos.h
         apcamera/navigationview.cpp
         apcamera/navigationview.h
+        apcamera/faceprocessingpool.h
+        apcamera/faceprocessingpool.cpp
         logger/logger.cpp
         logger/logger.h
+        apcamera/faceprocessing.h
+        apcamera/faceprocessing.cpp
     )
 # Define target properties for Android with Qt 6 as:
 #    set_property(TARGET WeildScanner APPEND PROPERTY QT_ANDROID_PACKAGE_SOURCE_DIR
@@ -95,6 +100,24 @@ target_link_libraries(WeildScanner PRIVATE
     Qt${QT_VERSION_MAJOR}::Widgets
     Qt${QT_VERSION_MAJOR}::Core ${OpenCV_LIBS}
 )
+
+file(GLOB OPENCV_RUNTIME_DLLS "${OPENCV_DIR}/x64/mingw/bin/libopencv_*.dll")
+if(OPENCV_RUNTIME_DLLS)
+    add_custom_command(TARGET WeildScanner POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            ${OPENCV_RUNTIME_DLLS}
+            $<TARGET_FILE_DIR:WeildScanner>
+    )
+endif()
+
+file(GLOB FACE_MODEL_FILES "${PARENT_DIR}/settings/*.onnx")
+if(FACE_MODEL_FILES)
+    add_custom_command(TARGET WeildScanner POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            ${FACE_MODEL_FILES}
+            $<TARGET_FILE_DIR:WeildScanner>
+    )
+endif()
 
 # Qt for iOS sets MACOSX_BUNDLE_GUI_IDENTIFIER automatically since Qt 6.1.
 # If you are developing for iOS or macOS you should consider setting an

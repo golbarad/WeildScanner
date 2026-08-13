@@ -529,4 +529,68 @@ void SCANNER_POS::transformPos(cv::Mat *pos_rel_scan, cv::Mat *pos_rel_tape)
     *pos_rel_tape = mat4x4Pos * (*pos_rel_scan);
 }
 //----------------------------------------------------------------\\-------
+bool DETECTED_FACE::faceDetect()
+{
+    // Сбрасываем состояние предыдущего кадра
+    faceDetected = false;
+    currentFaces.clear();
+    currentfaceMatch.clear();
+
+    // если нет изображения
+    if (matBgr.empty())        
+        return false;
+    if (detector.empty() || recognizer.empty())        
+        return false;
+
+    //запускем дедектор
+    cv::Mat faces;
+    try {
+        detector->setInputSize(matBgr.size());
+        detector->detect(matBgr, faces);
+    } catch (const cv::Exception &e) {
+        qDebug() << "face detect error:" << e.what();
+        return false;
+    }
+
+    // Лица не обнаружены
+    if (faces.empty() || faces.rows == 0)
+        return false;
+
+    faceDetected = true;    
+
+    // Обрабатываем все найденные лица
+    for (int i = 0; i < faces.rows; ++i)
+    {
+        cv::Mat alignedFace;
+        cv::Mat feature;
+
+        // Строка faces содержит параметры одного найденного лица
+        cv::Mat face = faces.row(i);
+        try {
+            recognizer->alignCrop(matBgr,face, alignedFace);
+            if (alignedFace.empty())
+                continue;
+
+            recognizer->feature(alignedFace,feature);
+        } catch (const cv::Exception &e) {
+            qDebug() << "face recognize error:" << e.what();
+            continue;
+        }
+
+        if (feature.empty())
+            continue;
+        // Сравнение требуется только при checkFace == true
+        bool match = false;
+        if (checkFace && !originFace.empty())
+        {
+            double score = recognizer->match(feature, originFace, cv::FaceRecognizerSF::FR_COSINE );
+            constexpr double MATCH_THRESHOLD = 0.363;
+            match = score >= MATCH_THRESHOLD;
+        }
+        //фомриурем списки
+        currentFaces.push_back(face.clone());
+        currentfaceMatch.push_back(match);
+    }
+    return faceDetected;
+}
 

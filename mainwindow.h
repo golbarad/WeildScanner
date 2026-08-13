@@ -5,6 +5,7 @@
 #include <QSettings>
 #include "apcamera/cameraopencv.h"
 #include "apcamera/frameprocessingpool.h"
+#include "apcamera/faceprocessingpool.h"
 
 QT_BEGIN_NAMESPACE
 namespace Ui {
@@ -22,6 +23,9 @@ class MainWindow : public QMainWindow
     FrameProcessingPool *m_procPool;
     //параметры детектирования
     OBJECT_PARAMS m_objParams;
+
+    //объект обработки лиц
+    FaceProcessingPool *m_FacePool;
 
 
     //терминал событий оборудования

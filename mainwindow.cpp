@@ -16,10 +16,13 @@ MainWindow::MainWindow(QWidget *parent)
     m_camera = new CameraOpenCv();
     // //m_camera->startCamera(0, 50);
     // //switchToCamera_0(true);
-    m_procPool = new FrameProcessingPool();
-    //вид процесса навигации
-    ui->m_navView->m_scannerPos =  &m_procPool->m_scannerPos;
-    m_procPool->setObjParams(&m_objParams);
+    // m_procPool = new FrameProcessingPool();
+    // //вид процесса навигации
+    // ui->m_navView->m_scannerPos =  &m_procPool->m_scannerPos;
+    // m_procPool->setObjParams(&m_objParams);
+
+    m_FacePool = new FaceProcessingPool();
+    ui->m_camViw->m_faces =  &m_FacePool->m_faceInfo;
 
     //логирование
     LOGGER(0)->copy_to_stdout = true;
@@ -37,10 +40,12 @@ MainWindow::MainWindow(QWidget *parent)
     //так подключаем камеру сразу к отображателю
     connect(m_camera, SIGNAL(frameCap(cv::Mat)), ui->m_camViw, SLOT(updateImage(cv::Mat)));
     //в рабочем варианте камеру подключаем к пулу обработчиков и другие объекты
-    connect(m_camera, SIGNAL(frameCap(cv::Mat)), m_procPool, SLOT(processFrame(cv::Mat)));
-    connect(m_procPool, SIGNAL(imageProcessed(cv::Mat)), ui->m_camViw, SLOT(updateImage(cv::Mat)));
-    connect(m_procPool, SIGNAL(imageProcessed(cv::Mat)), ui->m_navView, SLOT(update()));
-    connect(m_procPool, SIGNAL(drawAxesAngle()), ui->m_navView, SLOT(update()));
+    // connect(m_camera, SIGNAL(frameCap(cv::Mat)), m_procPool, SLOT(processFrame(cv::Mat)));
+    // connect(m_procPool, SIGNAL(imageProcessed(cv::Mat)), ui->m_camViw, SLOT(updateImage(cv::Mat)));
+    // connect(m_procPool, SIGNAL(imageProcessed(cv::Mat)), ui->m_navView, SLOT(update()));
+    // connect(m_procPool, SIGNAL(drawAxesAngle()), ui->m_navView, SLOT(update()));
+    connect(m_camera, SIGNAL(frameCap(cv::Mat)), m_FacePool, SLOT(processFrame(cv::Mat)));
+    //connect(m_FacePool, SIGNAL(u), ui->m_navView, SLOT(update()));
 
     //меню подключения камеры
     connect(ui->actionCamera0, SIGNAL(triggered(bool)), this, SLOT(switchToCamera_0(bool)));
@@ -54,6 +59,7 @@ MainWindow::MainWindow(QWidget *parent)
 
     //switchToCamera_0(true);
     switchToDefCamera();
+    qDebug() << "startTing";
 }
 
 MainWindow::~MainWindow()

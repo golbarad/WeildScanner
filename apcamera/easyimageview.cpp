@@ -2,6 +2,7 @@
 
 EasyImageView::EasyImageView(QWidget *parent) : QWidget(parent)
 {
+    m_faces = NULL;
     m_fps = 0;
     m_tmFps.restart();
 }
@@ -27,6 +28,12 @@ void EasyImageView::updateImage(cv::Mat mat)
     update();
 }
 
+// void EasyImageView::updateFaces(QVector<FACE_INFO> *faces)
+// {
+//     m_faces = faces;
+//     update();
+// }
+
 void EasyImageView::paintEvent(QPaintEvent */*event*/)
 {
     if(rect().height() == 0 || rect().width() == 0) { return; }
@@ -37,16 +44,39 @@ void EasyImageView::paintEvent(QPaintEvent */*event*/)
     //это простой отображатель, учтем только соотношение сторон
     float aspWgt = (float)rect().width() / rect().height();
     float aspImg = (float)m_imageHdr.width() / m_imageHdr.height();
+    QRect rcImage;
     if(aspWgt >= aspImg) {
         int w = aspImg * rect().height(), h = rect().height();
         int x = (rect().width() - w) / 2, y = 0;
-        QRect rc(x, y, w, h);
-        painter.drawImage(rc, m_imageHdr);
+        rcImage = QRect(x, y, w, h);
+        painter.drawImage(rcImage, m_imageHdr);
     } else {
         int w = width(), h = rect().width() / aspImg;
         int x = 0, y = (rect().height() - h) / 2;
-        QRect rc(x, y, w, h);
-        painter.drawImage(rc, m_imageHdr);
+        rcImage = QRect(x, y, w, h);
+        painter.drawImage(rcImage, m_imageHdr);
+    }
+
+    if(m_faces != NULL) {
+        const double kx = (double)rcImage.width() / m_imageHdr.width();
+        const double ky = (double)rcImage.height() / m_imageHdr.height();
+
+        QPen penMatch(qRgb(0, 196, 0));
+        penMatch.setWidth(2);
+        QPen penNoMatch(qRgb(196, 0, 0));
+        penNoMatch.setWidth(2);
+
+        for(const FACE_INFO &face : *m_faces) {
+            QRectF rcFace(
+                rcImage.left() + face.rect.left() * kx,
+                rcImage.top() + face.rect.top() * ky,
+                face.rect.width() * kx,
+                face.rect.height() * ky
+            );
+
+            painter.setPen(face.match ? penMatch : penNoMatch);
+            painter.drawRect(rcFace);
+        }
     }
 
     QFont font("monospace", 11); painter.setFont(font);

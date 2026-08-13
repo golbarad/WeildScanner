@@ -127,6 +127,42 @@ struct TAPE_ZERO_POS {
     int firstDistMm;
 };
 
+
+//детекотор лци
+struct DETECTED_FACE {
+   //DETECTED_FACE();
+
+    //флаг провекри лица
+    bool checkFace = false;
+    // SFace embedding эталонного лица
+    cv::Mat originFace;
+
+    // исходный кадр
+    cv::Mat matBgr;
+    // SFace embeddings найденных лиц
+    std::vector<cv::Mat> currentFaces;
+    //веткор соответстяи искомому лицу
+    std::vector<bool> currentfaceMatch;
+
+    bool faceDetected = false;
+
+    //обьекты детекторов
+    cv::Ptr<cv::FaceDetectorYN> detector;
+    cv::Ptr<cv::FaceRecognizerSF> recognizer;
+
+    bool faceDetect();
+};
+
+//парамтры обнаруженного лица
+struct FACE_INFO {
+    //FACE_INFO();
+
+    QRectF rect;
+    bool match;
+    double score;
+};
+
+
 //структура позиции сканера
 struct SCANNER_POS {
     SCANNER_POS();

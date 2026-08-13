@@ -30,7 +30,6 @@ void FrameTapeProcessing::processing()
         //если лента зафикисирована
         m_tapePos.tapeWorkPosition();
     }
-
     emit processingFinished(this);
 }
 
