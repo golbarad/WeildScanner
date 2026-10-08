@@ -2,7 +2,7 @@
 
 EasyImageView::EasyImageView(QWidget *parent) : QWidget(parent)
 {
-    m_faces = NULL;
+
     m_fps = 0;
     m_tmFps.restart();
 }
@@ -57,27 +57,27 @@ void EasyImageView::paintEvent(QPaintEvent */*event*/)
         painter.drawImage(rcImage, m_imageHdr);
     }
 
-    if(m_faces != NULL) {
-        const double kx = (double)rcImage.width() / m_imageHdr.width();
-        const double ky = (double)rcImage.height() / m_imageHdr.height();
+    // if(m_faces != NULL) {
+    //     const double kx = (double)rcImage.width() / m_imageHdr.width();
+    //     const double ky = (double)rcImage.height() / m_imageHdr.height();
 
-        QPen penMatch(qRgb(0, 196, 0));
-        penMatch.setWidth(2);
-        QPen penNoMatch(qRgb(0, 196, 0));
-        penNoMatch.setWidth(2);
+    //     QPen penMatch(qRgb(0, 196, 0));
+    //     penMatch.setWidth(2);
+    //     QPen penNoMatch(qRgb(0, 196, 0));
+    //     penNoMatch.setWidth(2);
 
-        for(const FACE_INFO &face : *m_faces) {
-            QRectF rcFace(
-                rcImage.left() + face.rect.left() * kx,
-                rcImage.top() + face.rect.top() * ky,
-                face.rect.width() * kx,
-                face.rect.height() * ky
-            );
+    //     for(const FACE_INFO &face : *m_faces) {
+    //         QRectF rcFace(
+    //             rcImage.left() + face.rect.left() * kx,
+    //             rcImage.top() + face.rect.top() * ky,
+    //             face.rect.width() * kx,
+    //             face.rect.height() * ky
+    //         );
 
-            painter.setPen(face.match ? penMatch : penNoMatch);
-            painter.drawRect(rcFace);
-        }
-    }
+    //         painter.setPen(face.match ? penMatch : penNoMatch);
+    //         painter.drawRect(rcFace);
+    //     }
+    // }
 
     QFont font("monospace", 11); painter.setFont(font);
     //частота кадров

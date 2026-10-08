@@ -56,12 +56,12 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
         apcamera/frametapesetzeropos.h
         apcamera/navigationview.cpp
         apcamera/navigationview.h
-        apcamera/faceprocessingpool.h
-        apcamera/faceprocessingpool.cpp
+
+
         logger/logger.cpp
         logger/logger.h
-        apcamera/faceprocessing.h
-        apcamera/faceprocessing.cpp
+
+
     )
 # Define target properties for Android with Qt 6 as:
 #    set_property(TARGET WeildScanner APPEND PROPERTY QT_ANDROID_PACKAGE_SOURCE_DIR
