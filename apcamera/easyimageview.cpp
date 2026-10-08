@@ -63,7 +63,7 @@ void EasyImageView::paintEvent(QPaintEvent */*event*/)
 
         QPen penMatch(qRgb(0, 196, 0));
         penMatch.setWidth(2);
-        QPen penNoMatch(qRgb(196, 0, 0));
+        QPen penNoMatch(qRgb(0, 196, 0));
         penNoMatch.setWidth(2);
 
         for(const FACE_INFO &face : *m_faces) {
