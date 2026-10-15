@@ -1,166 +1,180 @@
 #include "cameraopencv.h"
+#include "weildsynthetic.h"
+#include <QSettings>
+#include <QMetaMethod>
+#include <algorithm>
+#include <cmath>
+#include <exception>
 
-//канал логирования
-#define LCH     0
-
-
-CameraOpenCv::CameraOpenCv(QObject *parent) : QObject(parent)
+CameraOpenCv::CameraOpenCv(QObject *parent) : QObject(nullptr)
 {
-    //объект openCv cv::Mat имеет все свойства
-    //чтобы быть зарегистрированым для Qt metacall
+    Q_UNUSED(parent) // No GUI parent: the object moves to its own thread.
     qRegisterMetaType<cv::Mat>("cv::Mat");
-
-    //если файла нет, то сделаем этот файл по умолчанию
-    QFileInfo fi(PATH_NAME_CAMERA_PARAMS_FILE);
-    if(!fi.exists()) { saveCameraParams(); }
-
-    //загружаем параметры объекта
-    cv::FileStorage fs(fi.absoluteFilePath().toUtf8().data(), cv::FileStorage::READ);
-    if(fs.isOpened()) {
-        fs["camera_id"] >> m_cameraId;
-    } else {
-        std::cout << "can't load file camera parameters" << std::endl;
-    }
-    fs.release();
-
-    m_captureInterval = 20;
-    m_frameCounter = 0;
-
-    //создаем таймер зайвата кадров
-    //(чтобы он вошел в поток указываем родителя
-    //https://habr.com/ru/articles/467261/)
-    m_timerCap = new QTimer(this);
-
-    //создаем и стартуем отдельный поток
-    m_thread = new QThread();
-    m_thread->start();
-    //переносим этот объект в этот поток
+    QSettings settings;
+    m_cameraId=settings.value("Camera/id",0).toInt();
+    m_timerCap=new QTimer(this);
+    m_timerCap->setTimerType(Qt::PreciseTimer);
+    connect(m_timerCap,&QTimer::timeout,this,&CameraOpenCv::captureCameraFrame);
+    m_thread=new QThread;
     moveToThread(m_thread);
+    m_thread->start();
 }
 
 CameraOpenCv::~CameraOpenCv()
 {
-   BLOG(LCH) << "start the actions from ~CameraOpenCv() \n"
-              << "\tinvoke slotStartCamera() and wait it ...";
-    LOGEND(LCH);
-    stopCamera();
+    QThread *ownerThread=QThread::currentThread();
+    if (ownerThread==m_thread)
+        qFatal("CameraOpenCv must be destroyed outside its capture thread");
 
-    BLOG(LCH) << "CameraOpenCv thread stop and wait end ... \n";
-    m_thread->exit();
+    // Destruction cannot abandon work that still accesses this object. Unlike an
+    // ordinary command, cleanup must complete before members and children die.
+    const auto result=runInCameraThread([this,ownerThread]{
+        stopInThread();
+        moveToThread(ownerThread);
+        return thread()==ownerThread;
+    },QDeadlineTimer(QDeadlineTimer::Forever));
+    if (result!=OperationResult::Success)
+        qFatal("CameraOpenCv could not finish cleanup in its capture thread");
+    m_thread->quit();
     m_thread->wait();
-    BLOG(LCH) << " ok\n"; LOGEND(LCH);
-
     delete m_thread;
-    delete m_timerCap;
+}
+
+//Управаление камерой в отдельном потоке
+//с блокирующим ождианием заршения операции operation
+CameraOpenCv::OperationResult CameraOpenCv::runInCameraThread(
+    std::function<bool()> operation, QDeadlineTimer deadline)
+{
+    if (QThread::currentThread()==m_thread)
+        return OperationResult::WrongThread;
+    if (!m_thread->isRunning())
+        return OperationResult::ThreadNotRunning;
+
+    auto state=QSharedPointer<Completion>::create();
+    QMutexLocker lock(&state->mutex);
+    QTimer::singleShot(0,this,[this,state,operation=std::move(operation)]{
+        bool success=false;
+        QString error;
+        try {
+            //выполняемая операция
+            success=operation();
+        } catch (const std::exception &e) {
+            error=QString::fromUtf8(e.what());
+        } catch (...) {
+            error=QStringLiteral("Unknown camera operation error");
+        }
+        if (!error.isEmpty()) {
+            qDebug() << "operation error";
+            try {
+                stopInThread();
+            } catch (...) {}
+        }
+        {
+            QMutexLocker lock(&state->mutex);
+            state->success=success;
+            state->done=true;
+            state->condition.wakeAll();
+        }
+        if (!error.isEmpty()) emit captureError(error);
+    });
+
+    while (!state->done) {
+        if (!state->condition.wait(&state->mutex,deadline) && !state->done) {
+            lock.unlock();
+            emit captureError(QStringLiteral("Camera command timed out; it may still complete"));
+            return OperationResult::Timeout;
+        }
+    }
+    return state->success ? OperationResult::Success : OperationResult::Failed;
 }
 
 void CameraOpenCv::saveCameraParams()
 {
-    //загружаем параметры объекта
-    cv::FileStorage fs(PATH_NAME_CAMERA_PARAMS_FILE, cv::FileStorage::WRITE);
-    if(fs.isOpened()) {
-        fs << "camera_id" << m_cameraId;
-    } else {
-        std::cout << "can't save file camera parameters" << std::endl;
-    }
-    fs.release();
+    QSettings settings;
+    settings.setValue("Camera/id",m_cameraId);
+}
+void CameraOpenCv::startTimer(int fps)
+{
+    m_captureInterval=std::max(1,int(std::round(1000./std::clamp(fps,1,1000))));
+    m_frameCounter=0;
+    m_timerCap->start(m_captureInterval);
 }
 
-void CameraOpenCv::startCamera(int id, int fps)
+CameraOpenCv::OperationResult CameraOpenCv::startCamera(int id, int fps, QSize size)
 {
-    m_cameraId = id;
-    if(fps <= 0) { fps = 1; }
-    m_captureInterval = 1000 / fps;
-    QTimer::singleShot(0, this, SLOT(slotStartCamera()));
+    if (QThread::currentThread()==m_thread)
+        return OperationResult::WrongThread;
+    m_cameraId=id;
     saveCameraParams();
-
-    m_mutexWaitSlot.lock();
-    m_waitSlot.wait(&m_mutexWaitSlot, 5000);
-    m_mutexWaitSlot.unlock();
+    return runInCameraThread([this,id,fps,size]{
+        stopInThread();
+        if (!m_cap.open(id,cv::CAP_ANY)) {
+            emit captureError("Cannot open camera");
+            return false;
+        }
+        m_cap.set(cv::CAP_PROP_FRAME_WIDTH,size.width());
+        m_cap.set(cv::CAP_PROP_FRAME_HEIGHT,size.height());
+        m_cap.set(cv::CAP_PROP_FPS,fps);
+        m_cap.set(cv::CAP_PROP_BUFFERSIZE,1);
+        m_source=Source::Camera;
+        const double sourceFps=m_cap.get(cv::CAP_PROP_FPS);
+        startTimer(fps);
+        return true;
+    });
 }
 
-void CameraOpenCv::stopCamera()
+CameraOpenCv::OperationResult CameraOpenCv::startVideo(const QString &path, int fps)
 {
-    QTimer::singleShot(0, this, SLOT(slotStopCamera()));
-
-    m_mutexWaitSlot.lock();
-    m_waitSlot.wait(&m_mutexWaitSlot, 5000);
-    m_mutexWaitSlot.unlock();
+    return runInCameraThread([this,path,fps]{
+        stopInThread();
+        if (!m_cap.open(path.toStdString())) {
+            emit captureError("Cannot open video");
+            return false;
+        }
+        const double sourceFps=m_cap.get(cv::CAP_PROP_FPS);
+        m_source=Source::Video;
+        startTimer(std::isfinite(sourceFps) && sourceFps>=1 && sourceFps<=1000
+                       ? int(std::round(sourceFps)) : fps);
+        return true;
+    });
 }
 
-void CameraOpenCv::slotStartCamera()
+CameraOpenCv::OperationResult CameraOpenCv::startSynthetic(int fps)
 {
-    //BLOG(LCH) << "CameraOpenCv::slotStartCamera() ... \n";
-
-    if(m_cap.isOpened()) {
-        BLOG(LCH) << "\trelease before open camera \n";
-        m_cap.release();
-    }
-    if(m_cap.open(m_cameraId, cv::CAP_ANY))
-    {
-       BLOG(LCH) << "\tcamera " << m_cameraId << " is open \n";
-        //установить и проверить разрешение камеры
-        //m_cap.set(cv::CAP_PROP_FRAME_WIDTH, 1024);
-        //m_cap.set(cv::CAP_PROP_FRAME_HEIGHT, 768);
-        //
-        //m_cap.set(cv::CAP_PROP_FRAME_WIDTH, 640);
-        //m_cap.set(cv::CAP_PROP_FRAME_HEIGHT, 480);
-        m_cap.set(cv::CAP_PROP_FRAME_WIDTH, 320);
-        m_cap.set(cv::CAP_PROP_FRAME_HEIGHT, 240);
-
-        //установить и проверить формат кадра
-        //int fmtSet = CV_8UC3;//CV_8SC3 установка формата дает ошибку
-        //VIDEOIO ERROR: V4L2: setting property #8 is not supported
-        //но работает, но с современными камерами все хорошо и так
-        //m_cap.set(cv::CAP_PROP_FORMAT, fmtSet);
-        //int fmtGet = m_cap.get(cv::CAP_PROP_FORMAT);
-        //if(fmtSet == fmtGet) {
-        //    fprintf(stdout, "set format %i == %i - ok\n", fmtSet, fmtGet); fflush(stdout);
-        //} else {
-        //    fprintf(stdout, "set format %i != %i - bad\n", fmtSet, fmtGet); fflush(stdout);
-        //}
-        //закоментено, раскоментировать для проверки других камер
-
-        //запускаем таймер захвата кадров
-        BLOG(LCH) << "\tstart the camera timer for " << m_captureInterval << " ms \n";
-        connect(m_timerCap, SIGNAL(timeout()), this, SLOT(captureCameraFrame()));
-        m_timerCap->start(m_captureInterval);
-    }
-    else {
-        BLOG(LCH) << "\tcan't open camera " << m_cameraId << "\n";
-    }
-    m_waitSlot.wakeAll();
-    LOGEND(LCH);
+    return runInCameraThread([this,fps]{
+        stopInThread();
+        m_source=Source::Synthetic;
+        startTimer(fps);
+        return true;
+    });
 }
-
-void CameraOpenCv::slotStopCamera()
+void CameraOpenCv::stopInThread()
 {
-    BLOG(LCH) << "slotStopCamera():\n";
-    if(m_timerCap->isActive()) {
-        BLOG(LCH) << "\tstop timer\n";
-        m_timerCap->stop();
-        disconnect(m_timerCap, SIGNAL(timeout()), this, SLOT(captureCameraFrame()));
-    }
-    if(m_cap.isOpened()) {
-        BLOG(LCH) << "\trelease camera\n";
-        m_cap.release();
-    }
-    LOGEND(LCH);
-    m_waitSlot.wakeAll();
+    m_timerCap->stop();
+    m_cap.release();
+    m_source=Source::Stopped;
 }
-
+CameraOpenCv::OperationResult CameraOpenCv::stopCamera()
+{
+    return runInCameraThread([this]{stopInThread(); return true;});
+}
 void CameraOpenCv::captureCameraFrame()
 {
-    if(!m_cap.grab()) {
-        fprintf(stdout, "m_cap.grab() return false\n"); fflush(stdout);
-        return;
-    }
-    if(!m_cap.retrieve(m_matFrame)) {
-        fprintf(stdout, "m_cap.retrieve() return false\n"); fflush(stdout);
-        return;
-    }
-    //fprintf(stdout, "%i\n", m_frameCounter); fflush(stdout);
-
-    emit frameCap(m_matFrame);
-    m_frameCounter++;
+    try {
+        cv::Mat image;
+        if (m_source==Source::Synthetic)
+            image=WeildSynthetic::frame(4*std::sin(m_frameCounter*.02),20,6,
+                                       m_frameCounter%240 < 232,unsigned(m_frameCounter+1));
+        else if (m_source==Source::Stopped) return;
+        else if (!m_cap.read(image) || image.empty()) {
+            bool video=m_source==Source::Video;
+            stopInThread();
+            if (video) emit sourceFinished(); else emit captureError("Camera read failed");
+            return;
+        }
+        //const auto timestamp=WeildDetect::monotonicNs();
+        emit frameCaptured(image,/*timestamp*/0);
+        if (isSignalConnected(QMetaMethod::fromSignal(&CameraOpenCv::frameCap))) emit frameCap(image.clone());
+        ++m_frameCounter;
+    } catch (const cv::Exception &e) { stopInThread(); emit captureError(QString::fromUtf8(e.what())); }
 }

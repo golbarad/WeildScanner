@@ -1,73 +1,64 @@
-#ifndef CAMERAOPENCV_H
-#define CAMERAOPENCV_H
-
-/*
-    CameraOpenCv - класс объекта камеры
-
-*/
-
+#pragma once
 #include <QObject>
 #include <QThread>
 #include <QTimer>
-#include <QMutex>
-#include <QWaitCondition>
-#include <QApplication>
-#include <QFileInfo>
-
+#include <QSize>
+#include <QDeadlineTimer>
+#include <functional>
 #include <opencv2/opencv.hpp>
+#include <QMutex>
+#include <QMutexLocker>
+#include <QSharedPointer>
+#include <QWaitCondition>
+#include "cvmetatypes.h"
 #include "logger/logger.h"
-
 
 class CameraOpenCv : public QObject
 {
     Q_OBJECT
 public:
+    enum class OperationResult { Success, Failed, Timeout, WrongThread, ThreadNotRunning };
     explicit CameraOpenCv(QObject *parent = nullptr);
-    ~CameraOpenCv();
-
-    //сохранить параметры камеры
+    ~CameraOpenCv() override;
     void saveCameraParams();
+    // Called from the owner thread. Timeout stops waiting, not the queued operation.
+    OperationResult startCamera(int id, int fps, QSize size = QSize(640,480));
+    OperationResult startVideo(const QString &path, int fallbackFps = 60);
+    OperationResult startSynthetic(int fps = 80);
+    OperationResult stopCamera();
 
-    //открыть и стартовать камеру cv::VideoCapture
-    void startCamera(int id, int fps);
-    //остановить и закрыть камеру
-    void stopCamera();
-
-    //идентификатор камеры openCv
-    int m_cameraId;
-    //интервал таймера захвата
-    int m_captureInterval;
-    //счет захваченных кадров
-    quint32 m_frameCounter;
-
+    int m_cameraId=0;
+    int m_captureInterval=12;
+    quint64 m_frameCounter=0;
 signals:
-    //камера захватила новый кадр
-    void frameCap(cv::Mat mat);
+    void frameCap(cv::Mat image);
+    void frameCaptured(cv::Mat image, qint64 timestampNs);
+    void captureError(QString error);
+    void sourceFinished();
+private:
 
-protected slots:
-    //перевызов соотв открытых функций
-    void slotStartCamera();
-    void slotStopCamera();
-
-    //захватить новый кадр
-    void captureCameraFrame();
-
-protected:
-    //синхронизация выполнения слотов
-    QMutex m_mutexWaitSlot;
-    QWaitCondition m_waitSlot;
-
-    //объект захвата кадров
+    //enum инкапсулирующий источник данныъх
+    enum class Source { Stopped, Camera, Video, Synthetic };
+    Source m_source=Source::Stopped;
     cv::VideoCapture m_cap;
-    //таймер захвата кадров
-    QTimer *m_timerCap;
-    //кадр в формате cv::Mat
-    cv::Mat m_matFrame;
+    QTimer *m_timerCap=nullptr;
 
-    //собственный поток
-    QThread *m_thread;
+    //Структура управляющая conditon осущетсвляющим блокировку
+    //потока для управления камерой
+    struct Completion {
+        QMutex mutex;
+        QWaitCondition condition;
+        bool done=false;
+        bool success=false;
+    };
+
+
+    QThread *m_thread=nullptr;
+
+
+    OperationResult runInCameraThread(std::function<bool()> operation,
+                                      QDeadlineTimer deadline = QDeadlineTimer(5000));
+    void stopInThread();
+    void captureCameraFrame();
+    void startTimer(int fps);
 };
-
-Q_DECLARE_METATYPE(cv::Mat)
-
-#endif // CAMERAOPENCV_H

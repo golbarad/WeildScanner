@@ -1,61 +1,52 @@
-#ifndef MAINWINDOW_H
-#define MAINWINDOW_H
-
+#pragma once
 #include <QMainWindow>
 #include <QSettings>
+#include <QDoubleSpinBox>
+#include <QLabel>
+#include <vector>
 #include "apcamera/cameraopencv.h"
-#include "apcamera/frameprocessingpool.h"
-#include "apcamera/faceprocessingpool.h"
+#include "apcamera/weildprocessingpool.h"
+#include "apcamera/weildrobotoutput.h"
 
 QT_BEGIN_NAMESPACE
-namespace Ui {
-class MainWindow;
-}
+namespace Ui { class MainWindow; }
 QT_END_NAMESPACE
 
 class MainWindow : public QMainWindow
 {
     Q_OBJECT
-
-    //объект камеры
-    CameraOpenCv *m_camera;
-    //объект обработки кадров
-    FrameProcessingPool *m_procPool;
-    //параметры детектирования
-    OBJECT_PARAMS m_objParams;
-
-    //объект обработки лиц
-    FaceProcessingPool *m_FacePool;
-
-
-    //терминал событий оборудования
-    LogTerminal *m_hwTerm;
-    //терминал событий навигации
-    LogTerminal *m_apTerm;
-
-
 public:
-    explicit MainWindow(QWidget *parent = 0);
-    ~MainWindow();
-
-    void showEvent(QShowEvent * event) override;
-    void closeEvent(QCloseEvent * event) override;
-
-    bool loadObjParams();
-    bool saveObjParams();
-    void formApply();
-    void formFill();
-
-
+    explicit MainWindow(QWidget *parent=nullptr);
+    ~MainWindow() override;
+    void showEvent(QShowEvent *event) override;
+    void closeEvent(QCloseEvent *event) override;
 public slots:
-    //переключение камер
     void switchToDefCamera();
     void switchToCamera_0(bool on);
     void switchToCamera_1(bool on);
     void switchToCamera_2(bool on);
     void switchToCamera_3(bool on);
-
 private:
     Ui::MainWindow *ui;
+    CameraOpenCv *m_camera=nullptr;
+    WeildProcessingPool *m_weildPool=nullptr;
+    WeildRobotOutput *m_robotOutput=nullptr;
+    LogTerminal *m_hwTerm=nullptr;
+    QLabel *m_measurement=nullptr;
+    QLabel *m_sourceLabel=nullptr;
+    WeildDetect::Parameters m_parameters;
+    WeildDetect::Calibration m_realCalibration;
+    bool m_synthetic=false;
+    std::vector<std::pair<double*,QDoubleSpinBox*>> m_parameterEditors;
+    void switchCamera(int id, bool on);
+    void startSynthetic();
+    void openVideo();
+    void loadCalibration();
+    void saveCalibration();
+    void createParameterPanel();
+    void applyParameters();
+    void fillParameters();
+    void showMeasurement(WeildDetect::Result result);
+    void report(const QString &message);
+    void configureSource(bool synthetic);
 };
-#endif // MAINWINDOW_H

@@ -1,5 +1,6 @@
 ﻿#ifndef APPSTRUCTS_H
 #define APPSTRUCTS_H
+#include "apcamera/cvmetatypes.h"
 
 #include "windows.h"
 #include <QApplication>

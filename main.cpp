@@ -3,11 +3,14 @@
 #include <QApplication>
 #include <QLocale>
 #include <QTranslator>
+#include <QTimer>
+#include <QFontDatabase>
 
 int main(int argc, char *argv[])
 {
     QApplication a(argc, argv);
     a.setOrganizationName("Kropus");
+    a.setApplicationName("WeildScanner");
 
     QTranslator translator;
     const QStringList uiLanguages = QLocale::system().uiLanguages();

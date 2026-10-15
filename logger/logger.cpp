@@ -45,7 +45,11 @@ LOGGER_STD_STREAM::LOGGER_STD_STREAM()
 {
     thread = QThread::currentThread();
     streamLog = new QTextStream(&strBuf);
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
     streamLog->setEncoding(QStringConverter::Utf8);
+#else
+    streamLog->setCodec("UTF-8");
+#endif
     streamLog->setNumberFlags(QTextStream::UppercaseDigits);
 }
 

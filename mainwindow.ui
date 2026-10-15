@@ -43,10 +43,10 @@
          </size>
         </property>
        </widget>
-       <widget class="QWidget" name="">
+       <widget class="QWidget" name="profilePanel">
         <layout class="QVBoxLayout" name="verticalLayout_2">
          <item>
-          <widget class="NavigationView" name="m_navView" native="true"/>
+          <widget class="WeildProfileView" name="m_navView" native="true"/>
          </item>
          <item>
           <widget class="QWidget" name="widget" native="true">
@@ -233,9 +233,9 @@
    <container>1</container>
   </customwidget>
   <customwidget>
-   <class>NavigationView</class>
+   <class>WeildProfileView</class>
    <extends>QWidget</extends>
-   <header location="global">apcamera/navigationview.h</header>
+   <header location="global">apcamera/weildprofileview.h</header>
    <container>1</container>
   </customwidget>
  </customwidgets>
