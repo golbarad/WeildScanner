@@ -235,7 +235,7 @@
   <customwidget>
    <class>WeildProfileView</class>
    <extends>QWidget</extends>
-   <header location="global">apcamera/weildprofileview.h</header>
+   <header location="global">weild_processor/weildprofileview.h</header>
    <container>1</container>
   </customwidget>
  </customwidgets>

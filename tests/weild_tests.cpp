@@ -1,8 +1,8 @@
-#include "apcamera/weilddetect.h"
-#include "apcamera/weildsynthetic.h"
-#include "apcamera/weildtracker.h"
-#include "apcamera/weildprocessingpool.h"
-#include "apcamera/weildrobotoutput.h"
+#include "weild_processor/weilddetect.h"
+#include "weild_processor/weildsynthetic.h"
+#include "weild_processor/weildtracker.h"
+#include "weild_processor/weildprocessingpool.h"
+#include "weild_processor/weildrobotoutput.h"
 #include "apcamera/cameraopencv.h"
 #include <QCoreApplication>
 #include <QEventLoop>

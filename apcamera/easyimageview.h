@@ -3,16 +3,13 @@
 
 /*
     EasyImageView - простой просмотрщик кадров cv::Mat
-
-    Взято почти без исправлений из этого проекта:
-    home/jury/scanenergy/autopilot/app/src/
 */
 
 #include <QWidget>
 #include <QPainter>
 #include <QElapsedTimer>
 #include "appstructs.h"
-#include "weilddetect.h"
+#include "weild_processor/weilddetect.h"
 #include <opencv2/opencv.hpp>
 
 class EasyImageView : public QWidget

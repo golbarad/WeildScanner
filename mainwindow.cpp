@@ -1,6 +1,6 @@
 #include "mainwindow.h"
 #include "./ui_mainwindow.h"
-#include "apcamera/weildsynthetic.h"
+#include "weild_processor/weildsynthetic.h"
 #include <QFileDialog>
 #include <QFormLayout>
 #include <QScrollArea>

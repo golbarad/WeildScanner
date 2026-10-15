@@ -5,8 +5,8 @@
 #include <QLabel>
 #include <vector>
 #include "apcamera/cameraopencv.h"
-#include "apcamera/weildprocessingpool.h"
-#include "apcamera/weildrobotoutput.h"
+#include "weild_processor/weildprocessingpool.h"
+#include "weild_processor/weildrobotoutput.h"
 
 QT_BEGIN_NAMESPACE
 namespace Ui { class MainWindow; }

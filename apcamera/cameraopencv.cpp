@@ -1,5 +1,5 @@
 #include "cameraopencv.h"
-#include "weildsynthetic.h"
+#include "weild_processor/weildsynthetic.h"
 #include <QSettings>
 #include <QMetaMethod>
 #include <algorithm>
