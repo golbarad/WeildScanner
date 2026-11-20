@@ -36,9 +36,11 @@ WeildProcessingPool::~WeildProcessingPool()
 bool WeildProcessingPool::configure(const WeildDetect::Parameters &p,
     const WeildDetect::Calibration &c, QString *error)
 {
+    qDebug() << " gtkhjjjkrth56jkotyjk "  << m_parameters.maxSaturatedWidth;
     Q_ASSERT(QThread::currentThread()==thread());
     if (!p.valid(error) || (!c.cameraMatrix.empty() && !c.valid(error))) return false;
     m_parameters=p; m_calibration=c.clone();
+    std::cout << " s "  << m_parameters.maxSaturatedWidth;
     reset();
     return true;
 }
@@ -143,12 +145,12 @@ void WeildProcessingPool::deliver(WeildDetect::Result r)
             const auto p=r.trackedCamera;
             const cv::Vec4d xyz=m_calibration.cameraToRobot*cv::Vec4d(p.x,p.y,p.z,1);
             r.centerRobot={xyz[0],xyz[1],xyz[2]};
-            r.robotValid=true;
         }
     }
     if (r.detected) {
-        m_path.push_back({r.frameId,/*r.timestampNs*/ 0,r.centerCamera,r.trackedCamera,r.centerRobot,
-                          r.robotValid,r.width,r.depth,r.angle,r.quality});
+        m_path.push_back({r.frameId,/*r.timestampNs*/ 0,r.centerCamera,r.trackedCamera,
+             r.centerRobot,r.width,r.depth,r.angle,r.quality}
+        );
         while (m_path.size()>size_t(m_parameters.maxPathPoints)) m_path.pop_front();
     }
     if (m_recording.isOpen()) {

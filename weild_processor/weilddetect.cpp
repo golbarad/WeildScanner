@@ -42,9 +42,15 @@ bool WeildDetect::Parameters::valid(QString *error) const
     const double values[] = {minSignal, maxPixelJump, minCoverage, workingDistance,
         distanceTolerance, minWidth, maxWidth, minDepth, maxDepth, minAngle, maxAngle,
         maxFitError, maxProfileGap, minQuality, predictionSeconds, maxTrackingJump, maxResultAge};
-    for (double v : values) if (!isFinite(v)) return fail(error, "Non-finite parameter");
-    if (roi.x < 0 || roi.y < 0 || roi.width < 0 || roi.height < 0 ||
-        ((roi.width == 0) != (roi.height == 0))) return fail(error, "Invalid ROI");
+
+    for (double v : values) {
+        if (!isFinite(v))
+            return fail(error, "Non-finite parameter");
+    }
+    if (target_rect.x < 0 || target_rect.y < 0 || target_rect.width < 0 || target_rect.height < 0 ||
+        ((target_rect.width == 0) != (target_rect.height == 0))) {
+        return fail(error, "Invalid ROI");
+    }
     if (backgroundWindow < 5 || backgroundWindow > 501 || backgroundWindow % 2 == 0 ||
         maxLineWidth < 2 || maxLineWidth >= backgroundWindow || maxSaturatedWidth < 0 ||
         minSignal <= 0 || minSignal >= 255 || maxPixelJump <= 0 || minPoints < 20 ||
@@ -54,7 +60,9 @@ bool WeildDetect::Parameters::valid(QString *error) const
         maxProfileGap <= 0 || minQuality < 0 || minQuality > 1 || predictionSeconds < 0 ||
         predictionSeconds > 2 || maxTrackingJump <= 0 || maxResultAge <= 0 ||
         maxResultAge > 5 || maxPathPoints < 1)
+    {
         return fail(error, "Invalid detector/tracker parameter range");
+    }
     return true;
 }
 
@@ -167,88 +175,76 @@ bool WeildDetect::configure(const Parameters &p, const Calibration &c, QString *
 
 std::vector<cv::Point2f> WeildDetect::extractLine(const cv::Mat &gray) const
 {
+    const auto &p = m_parameters;
+    cv::Rect target_rect = p.target_rect.empty() ? cv::Rect(0,0,gray.cols,gray.rows) :  p.target_rect & cv::Rect(0,0,gray.cols,gray.rows);
+    if (target_rect.width < p.minPoints || target_rect.height < p.backgroundWindow) return {};
+    cv::Mat smooth, signal;
+    //увеличение контрастности между фоном и лазером
+    cv::GaussianBlur(gray(target_rect), smooth, cv::Size(3,3), 0.7);
+    //Выдление элементов ярче окружающего фона
+    auto kernel = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(1,p.backgroundWindow));
+    cv::morphologyEx(smooth, signal, cv::MORPH_TOPHAT, kernel);
 
-    CV_Assert(gray.type() == CV_8UC1);
-
-    const cv::Rect bounds(0, 0, gray.cols, gray.rows);
-    const cv::Rect roi = m_parameters.roi.empty()
-                             ? bounds
-                             : m_parameters.roi & bounds;
-
-    std::vector<cv::Point2f> line;
-    if (roi.empty())
-        return line;
-
-    line.reserve(roi.width);
-    const double threshold = 150;
-
-    for (int x = roi.x; x < roi.x + roi.width; ++x) {
-        double sumY = 0;
-        int count = 0;
-
-        for (int y = roi.y; y < roi.y + roi.height; ++y) {
-            if (gray.at<uchar>(y, x) > threshold) {
-                sumY += y;
-                ++count;
+    std::vector<cv::Point2f> candidates;
+    for (int x=0; x<target_rect.width; x++)
+    {
+        double best = 0;
+        int yBest = -1;
+        //прорхдимя по свсе  y
+        for (int y=1; y< target_rect.height-1; y++)
+        {
+            //ищем самый ярких пиксель в  столбце
+            const double value = signal.at<uchar>(y,x);
+            if (value > best) {
+                best = value; yBest = y;
             }
         }
+        if (best < 10 || yBest < 1) continue;
+        int low = yBest, high = yBest;
 
-        if (count > 0) {
-            line.emplace_back(
-                static_cast<float>(x),
-                static_cast<float>(sumY / count));
+        //определяем диапазон сверху и снизу относительно пискеля (будут видны только горизонтальные линии))))
+        while (low > 0 && signal.at<uchar>(low-1,x) > best * 0.5)
+            low--;
+        while (high+1 < target_rect.height && signal.at<uchar>(high+1,x) > best * 0.5)
+            high++;
+        if (high-low+1 > 50 || low == 0 || high == target_rect.height-1)
+            continue;
+
+        //считаем якрось пискелей
+        int saturated = 0;
+        double total=0, moment=0;
+        //выделяем нужый диапазон
+        const int length = std::max(2, (high-low+1));
+        for (int y=std::max(0,yBest-length); y<=std::min(target_rect.height-1,yBest+length); y++)
+        {
+            if (gray.at<uchar>(y + target_rect.y,x + target_rect.x) >= 254)
+                saturated++;
+            const double weight = signal.at<uchar>(y,x);
+            total += weight;
+            moment += y*weight;
         }
+        static double saa_last = 0;
+        //std::cout << " saaaa "  << p.maxSaturatedWidth;
+        if (p.maxSaturatedWidth - 0.01 < saa_last || saa_last > p.maxSaturatedWidth + 0.01) {
+            saa_last = p.maxSaturatedWidth;
+            std::cout << "a " << saa_last << " \n";
+        }
+        if (saturated > p.maxSaturatedWidth || total <= 0)
+            continue;
+        //если якрость попдает в диапазон - добавляем точку
+        candidates.emplace_back(float(x+target_rect.x), float(moment/total+target_rect.y));
     }
-
+    std::vector<cv::Point2f> line;
+    for (size_t i=0; i<candidates.size(); ++i)
+    {
+        std::vector<double> neighbours;
+        const size_t begin = i > 2 ? i-2 : 0;
+        for (size_t j=begin; j<std::min(candidates.size(),i+3); ++j)
+            neighbours.push_back(candidates[j].y);
+        if (std::abs(candidates[i].y - median(neighbours)) <= p.maxPixelJump)
+        line.push_back(candidates[i]);
+    }
     return line;
-
-
-
-    // const auto &p = m_parameters;
-    // cv::Rect roi = p.roi.empty() ? cv::Rect(0,0,gray.cols,gray.rows) :
-    //                              p.roi & cv::Rect(0,0,gray.cols,gray.rows);
-    // if (roi.width < p.minPoints || roi.height < p.backgroundWindow) return {};
-    // cv::Mat smooth, signal;
-    // //увеличение контрастности между фоном и лазером
-    // cv::GaussianBlur(gray(roi), smooth, cv::Size(3,3), 0.7);
-    // cv::morphologyEx(smooth, signal, cv::MORPH_TOPHAT,
-    // cv::getStructuringElement(cv::MORPH_RECT, cv::Size(1,p.backgroundWindow)));
-
-    // std::vector<cv::Point2f> candidates;
-    // for (int x=0; x<roi.width; ++x) {
-    //     double best = 0;
-    //     int yBest = -1;
-    //     for (int y=1; y<roi.height-1; ++y) {
-    //         const double value = signal.at<uchar>(y,x);
-    //         if (value > best) { best = value; yBest = y; }
-    //     }
-    //     if (best < p.minSignal || yBest < 1) continue;
-    //     int low=yBest, high=yBest;
-    //     while (low > 0 && signal.at<uchar>(low-1,x) > best*.5) --low;
-    //     while (high+1 < roi.height && signal.at<uchar>(high+1,x) > best*.5) ++high;
-    //     if (high-low+1 > p.maxLineWidth || low == 0 || high == roi.height-1) continue;
-    //     int saturated = 0;
-    //     double total=0, moment=0;
-    //     const int radius = std::max(2, (high-low+1));
-    //     for (int y=std::max(0,yBest-radius); y<=std::min(roi.height-1,yBest+radius); ++y) {
-    //         if (gray.at<uchar>(y+roi.y,x+roi.x) >= 254) ++saturated;
-    //         const double weight = signal.at<uchar>(y,x);
-    //         total += weight;
-    //         moment += y*weight;
-    //     }
-    //     if (saturated > p.maxSaturatedWidth || total <= 0) continue;
-    //     candidates.emplace_back(float(x+roi.x), float(moment/total+roi.y));
-    // }
-    // std::vector<cv::Point2f> line;
-    //  for (size_t i=0; i<candidates.size(); ++i) {
-    // //     std::vector<double> neighbours;
-    // //     const size_t begin = i > 2 ? i-2 : 0;
-    // //     for (size_t j=begin; j<std::min(candidates.size(),i+3); ++j)
-    // //         neighbours.push_back(candidates[j].y);
-    // //     if (std::abs(candidates[i].y - median(neighbours)) <= p.maxPixelJump)
-    //     line.push_back(candidates[i]);
-    // }
-    // return line;
 }
 
 bool WeildDetect::triangulate(Result &r, cv::Size size) const
@@ -366,7 +362,6 @@ WeildDetect::Result WeildDetect::process(const cv::Mat &image, quint64 id, qint6
 {
     Result r;
     r.frameId=id;
-    //```````````````````````````````````````                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   `r.timestampNs=timestamp;
     QElapsedTimer timer; timer.start();
     try {
         if (image.empty() || image.depth() != CV_8U ||
@@ -377,24 +372,24 @@ WeildDetect::Result WeildDetect::process(const cv::Mat &image, quint64 id, qint6
             cv::Mat gray;
             if (image.channels()==1) gray=image;
             else cv::cvtColor(image,gray,image.channels()==3 ? cv::COLOR_BGR2GRAY : cv::COLOR_BGRA2GRAY);
-            // Share the owned input frame; rendering belongs to the view.
+            // Копируем ссылку на текущий кадра
             r.overlay = image;
             r.laserPixels = extractLine(gray);
-            cv::Rect roi=m_parameters.roi.empty() ? cv::Rect(0,0,gray.cols,gray.rows) :
-                m_parameters.roi & cv::Rect(0,0,gray.cols,gray.rows);
+            cv::Rect roi=m_parameters.target_rect.empty() ? cv::Rect(0,0,gray.cols,gray.rows) :
+                m_parameters.target_rect & cv::Rect(0,0,gray.cols,gray.rows);
             r.quality = roi.width > 0 ? double(r.laserPixels.size())/roi.width : 0;
             if (r.laserPixels.size() < size_t(m_parameters.minPoints) || r.quality < m_parameters.minCoverage)
                 r.diagnostic = QObject::tr("Laser line missing or insufficient coverage");
-            // else if (triangulate(r,image.size()))
-            // {
-            //     r.quality *= double(r.profile.size())/r.laserPixels.size();
-            //     if (findGroove(r)) {
-            //         std::vector<cv::Point3d> xyz{r.leftShoulder,r.centerCamera,r.rightShoulder};
-            //         std::vector<cv::Point2d> pixels;
-            //         cv::projectPoints(xyz,cv::Vec3d(),cv::Vec3d(),m_calibration.cameraMatrix,m_calibration.distortion,pixels);
-            //         for (auto pixel : pixels) cv::circle(r.overlay,pixel,5,cv::Scalar(0,180,255),2);
-            //     }
-            // }
+            else if (triangulate(r,image.size()))
+            {
+                r.quality *= double(r.profile.size())/r.laserPixels.size();
+                if (findGroove(r)) {
+                    std::vector<cv::Point3d> xyz{r.leftShoulder,r.centerCamera,r.rightShoulder};
+                    std::vector<cv::Point2d> pixels;
+                    cv::projectPoints(xyz,cv::Vec3d(),cv::Vec3d(),m_calibration.cameraMatrix,m_calibration.distortion,pixels);
+                    for (auto pixel : pixels) cv::circle(r.overlay,pixel,5,cv::Scalar(0,180,255),2);
+                }
+            }
         }
     }
     catch (const cv::Exception &e) {

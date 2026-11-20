@@ -2,7 +2,10 @@
 #include <QObject>
 #include "weilddetect.h"
 
-// Worker analogous to FrameTapeProcessing, with a private detector and no shared algorithm state.
+
+/*
+    Класс инкапсулирующий упралвение сканированием
+*/
 class FrameWeildProcessing : public QObject
 {
     Q_OBJECT

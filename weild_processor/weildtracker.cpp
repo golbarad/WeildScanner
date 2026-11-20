@@ -17,7 +17,7 @@ WeildDetect::Result WeildTracker::predict(qint64 timestamp, const WeildDetect::P
     const double gap=(timestamp-m_measurementTime)*1e-9;
     if (gap > p.predictionSeconds || p.predictionSeconds <= 0) return out;
     out=m_lastMeasurement;
-    out.detected=false; out.predicted=true; out.robotValid=false;
+    out.detected=false; out.predicted=true;
     //out.timestampNs=timestamp;
     out.trackedCamera=m_position+m_velocity*((timestamp-m_stateTime)*1e-9);
     out.quality=m_lastMeasurement.quality*std::max(0.,1.-gap/p.predictionSeconds);
@@ -29,7 +29,7 @@ WeildDetect::Result WeildTracker::predict(qint64 timestamp, const WeildDetect::P
 WeildDetect::Result WeildTracker::update(WeildDetect::Result r, const WeildDetect::Parameters &p)
 {
     // if (m_initialized && r.timestampNs <= m_stateTime) {
-    //     r.detected=false; r.predicted=false; r.robotValid=false;
+    //     r.detected=false; r.predicted=false;
     //     r.diagnostic="Out-of-order timestamp";
     //     return r;
     // }

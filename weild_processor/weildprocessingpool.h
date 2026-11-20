@@ -21,7 +21,6 @@ public:
         quint64 frameId;
         qint64 timestampNs;
         cv::Point3d measuredCamera, trackedCamera, robot;
-        bool robotValid;
         double width, depth, angle, quality;
     };
 

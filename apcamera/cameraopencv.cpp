@@ -1,17 +1,14 @@
 #include "cameraopencv.h"
 #include "weild_processor/weildsynthetic.h"
-#include <QSettings>
 #include <QMetaMethod>
+#include <QDebug>
 #include <algorithm>
 #include <cmath>
 #include <exception>
 
-CameraOpenCv::CameraOpenCv(QObject *parent) : QObject(nullptr)
+CameraOpenCv::CameraOpenCv(QObject *parent) : ICamera(nullptr)
 {
-    Q_UNUSED(parent) // No GUI parent: the object moves to its own thread.
-    qRegisterMetaType<cv::Mat>("cv::Mat");
-    QSettings settings;
-    m_cameraId=settings.value("Camera/id",0).toInt();
+    Q_UNUSED(parent)
     m_timerCap=new QTimer(this);
     m_timerCap->setTimerType(Qt::PreciseTimer);
     connect(m_timerCap,&QTimer::timeout,this,&CameraOpenCv::captureCameraFrame);
@@ -26,13 +23,11 @@ CameraOpenCv::~CameraOpenCv()
     if (ownerThread==m_thread)
         qFatal("CameraOpenCv must be destroyed outside its capture thread");
 
-    // Destruction cannot abandon work that still accesses this object. Unlike an
-    // ordinary command, cleanup must complete before members and children die.
-    const auto result=runInCameraThread([this,ownerThread]{
-        stopInThread();
-        moveToThread(ownerThread);
-        return thread()==ownerThread;
-    },QDeadlineTimer(QDeadlineTimer::Forever));
+    const auto result=runInCameraThread(
+        [this,ownerThread]{
+            stopInThread(); moveToThread(ownerThread);
+            return thread()==ownerThread;
+        },QDeadlineTimer(QDeadlineTimer::Forever));
     if (result!=OperationResult::Success)
         qFatal("CameraOpenCv could not finish cleanup in its capture thread");
     m_thread->quit();
@@ -88,24 +83,25 @@ CameraOpenCv::OperationResult CameraOpenCv::runInCameraThread(
     return state->success ? OperationResult::Success : OperationResult::Failed;
 }
 
-void CameraOpenCv::saveCameraParams()
+ICamera::OperationResult CameraOpenCv::start(const Source &source)
 {
-    QSettings settings;
-    settings.setValue("Camera/id",m_cameraId);
+    if (const auto *device=std::get_if<Device>(&source))
+        return startCamera(device->id,device->fps,device->size);
+    if (const auto *video=std::get_if<Video>(&source))
+        return startVideo(video->path,video->fallbackFps);
+    if (const auto *synthetic=std::get_if<Synthetic>(&source))
+        return startSynthetic(synthetic->fps);
+    return OperationResult::UnsupportedSource;
 }
 void CameraOpenCv::startTimer(int fps)
 {
-    m_captureInterval=std::max(1,int(std::round(1000./std::clamp(fps,1,1000))));
+    const int captureInterval=std::max(1,int(std::round(1000./std::clamp(fps,1,1000))));
     m_frameCounter=0;
-    m_timerCap->start(m_captureInterval);
+    m_timerCap->start(captureInterval);
 }
 
 CameraOpenCv::OperationResult CameraOpenCv::startCamera(int id, int fps, QSize size)
 {
-    if (QThread::currentThread()==m_thread)
-        return OperationResult::WrongThread;
-    m_cameraId=id;
-    saveCameraParams();
     return runInCameraThread([this,id,fps,size]{
         stopInThread();
         if (!m_cap.open(id,cv::CAP_ANY)) {
@@ -116,7 +112,7 @@ CameraOpenCv::OperationResult CameraOpenCv::startCamera(int id, int fps, QSize s
         m_cap.set(cv::CAP_PROP_FRAME_HEIGHT,size.height());
         m_cap.set(cv::CAP_PROP_FPS,fps);
         m_cap.set(cv::CAP_PROP_BUFFERSIZE,1);
-        m_source=Source::Camera;
+        m_mode=Mode::Camera;
         const double sourceFps=m_cap.get(cv::CAP_PROP_FPS);
         startTimer(fps);
         return true;
@@ -132,7 +128,7 @@ CameraOpenCv::OperationResult CameraOpenCv::startVideo(const QString &path, int 
             return false;
         }
         const double sourceFps=m_cap.get(cv::CAP_PROP_FPS);
-        m_source=Source::Video;
+        m_mode=Mode::Video;
         startTimer(std::isfinite(sourceFps) && sourceFps>=1 && sourceFps<=1000
                        ? int(std::round(sourceFps)) : fps);
         return true;
@@ -143,7 +139,7 @@ CameraOpenCv::OperationResult CameraOpenCv::startSynthetic(int fps)
 {
     return runInCameraThread([this,fps]{
         stopInThread();
-        m_source=Source::Synthetic;
+        m_mode=Mode::Synthetic;
         startTimer(fps);
         return true;
     });
@@ -152,7 +148,7 @@ void CameraOpenCv::stopInThread()
 {
     m_timerCap->stop();
     m_cap.release();
-    m_source=Source::Stopped;
+    m_mode=Mode::Stopped;
 }
 CameraOpenCv::OperationResult CameraOpenCv::stopCamera()
 {
@@ -162,12 +158,12 @@ void CameraOpenCv::captureCameraFrame()
 {
     try {
         cv::Mat image;
-        if (m_source==Source::Synthetic)
+        if (m_mode==Mode::Synthetic)
             image=WeildSynthetic::frame(4*std::sin(m_frameCounter*.02),20,6,
                                        m_frameCounter%240 < 232,unsigned(m_frameCounter+1));
-        else if (m_source==Source::Stopped) return;
+        else if (m_mode==Mode::Stopped) return;
         else if (!m_cap.read(image) || image.empty()) {
-            bool video=m_source==Source::Video;
+            bool video=m_mode==Mode::Video;
             stopInThread();
             if (video) emit sourceFinished(); else emit captureError("Camera read failed");
             return;
@@ -176,5 +172,9 @@ void CameraOpenCv::captureCameraFrame()
         emit frameCaptured(image,/*timestamp*/0);
         if (isSignalConnected(QMetaMethod::fromSignal(&CameraOpenCv::frameCap))) emit frameCap(image.clone());
         ++m_frameCounter;
-    } catch (const cv::Exception &e) { stopInThread(); emit captureError(QString::fromUtf8(e.what())); }
+    }
+    catch (const cv::Exception &e) {
+        stopInThread();
+        emit captureError(QString::fromUtf8(e.what()));
+    }
 }

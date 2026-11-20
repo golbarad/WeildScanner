@@ -8,8 +8,8 @@ QJsonObject WeildRobotOutput::packet(const WeildDetect::Result &r)
         {"timestamp_ns",QString::number(/*r.timestampMs*/0)}, {"clock","steady_local"},
         {"units","mm"},{"coordinate_frame","robot"},
         {"status",r.predicted ? "predicted" : (r.detected ? "measured" : "lost")},
-        {"quality",r.quality},{"robot_valid",r.robotValid}, {"transport","stub"}};
-    if (r.robotValid && (r.detected || r.predicted)) {
+        {"quality",r.quality},{"robot_valid",true}, {"transport","stub"}};
+    if (r.detected || r.predicted) {
         out["center"]=QJsonArray{r.centerRobot.x,r.centerRobot.y,r.centerRobot.z};
         out["width_mm"]=r.width; out["depth_mm"]=r.depth; out["angle_deg"]=r.angle;
     }

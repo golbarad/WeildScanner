@@ -10,6 +10,7 @@
 #include <QTemporaryDir>
 #include <QJsonDocument>
 #include <iostream>
+#include <memory>
 #include <stdexcept>
 #include <cmath>
 
@@ -99,10 +100,10 @@ int main(int argc,char **argv)
         invalid=c.clone(); invalid.robotTransformValid=true; invalid.cameraToRobot(0,0)=2;
         check(!invalid.valid(),"non-rigid robot transform");
         auto old=p; old.backgroundWindow=4; check(!old.valid(),"invalid kernel");
-        old=p; old.roi={0,0,100,0}; check(!old.valid(),"invalid ROI");
+        old=p; old.target_rect={0,0,100,0}; check(!old.valid(),"invalid ROI");
         old=p; old.workingDistance=500;
         check(!WeildDetect(old,c).process(image,5,5).detected,"working distance gate");
-        old=p; old.roi={600,0,200,480};
+        old=p; old.target_rect={600,0,200,480};
         check(!WeildDetect(old,c).process(image,5,5).detected,"clipped ROI without groove");
 
         QTemporaryDir dir;
@@ -180,12 +181,12 @@ int main(int argc,char **argv)
         p.maxPathPoints=2;
         check(pool.configure(p,c,&error),"bounded path config");
         {
-            CameraOpenCv camera;
-            QObject::connect(&camera,&CameraOpenCv::frameCaptured,&pool,
+            std::unique_ptr<ICamera> camera=std::make_unique<CameraOpenCv>();
+            QObject::connect(camera.get(),&ICamera::frameCaptured,&pool,
                 [&](cv::Mat frame,qint64 time){pool.submitFrame(frame,time);},Qt::DirectConnection);
-            camera.startSynthetic(80);
+            check(camera->start(ICamera::Synthetic{80})==ICamera::OperationResult::Success,"start synthetic camera");
             QTimer::singleShot(400,&loop,&QEventLoop::quit); loop.exec();
-            camera.stopCamera();
+            check(camera->stopCamera()==ICamera::OperationResult::Success,"stop synthetic camera");
         }
         check(!pool.path().empty(),"synthetic capture through pool");
         check(pool.path().size()<=2,"bounded measured path");

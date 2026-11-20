@@ -11,8 +11,8 @@ if(NOT OpenCV_DIR AND EXISTS "J:/cv-qt/opencv_5.0.0/build/install/OpenCVConfig.c
     set(OpenCV_DIR "J:/cv-qt/opencv_5.0.0/build/install" CACHE PATH "OpenCV package directory")
 endif()
 find_package(OpenCV REQUIRED)
-find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Widgets)
-find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Widgets)
+find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Widgets Network)
+find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Widgets Network)
 get_filename_component(PARENT_DIR "${CMAKE_SOURCE_DIR}" DIRECTORY)
 add_compile_definitions(OPENCV_LINK_AS_SHARED NOMINMAX
     PATH_NAME_CAMERA_PARAMS_FILE="${PARENT_DIR}/settings/camera.xml"
@@ -40,7 +40,8 @@ set(PROJECT_SOURCES
     weild_processor/frameweildprocessing.h weild_processor/frameweildprocessing.cpp
     weild_processor/weildprocessingpool.h weild_processor/weildprocessingpool.cpp
     weild_processor/weildrobotoutput.h weild_processor/weildrobotoutput.cpp
-    apcamera/cameraopencv.h apcamera/cameraopencv.cpp
+    apcamera/icamera.h apcamera/cameraopencv.h apcamera/cameraopencv.cpp
+    apcamera/camerals2.h apcamera/camerals2.cpp
     logger/logger.cpp logger/logger.h)
 
 if(QT_VERSION_MAJOR EQUAL 6)
@@ -53,7 +54,7 @@ target_include_directories(WeildScanner PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/apcamera
     ${CMAKE_CURRENT_SOURCE_DIR}/logger
     ${OpenCV_INCLUDE_DIRS})
-target_link_libraries(WeildScanner PRIVATE Qt${QT_VERSION_MAJOR}::Widgets ${OpenCV_LIBS})
+target_link_libraries(WeildScanner PRIVATE Qt${QT_VERSION_MAJOR}::Widgets Qt${QT_VERSION_MAJOR}::Network ${OpenCV_LIBS})
 set_target_properties(WeildScanner PROPERTIES WIN32_EXECUTABLE TRUE MACOSX_BUNDLE TRUE)
 
 # Copy the OpenCV DLLs for this installation, without encoding its version in names.
@@ -69,6 +70,17 @@ endif()
     #add_test(NAME weild_module_tests COMMAND weild_tests)
     #set_tests_properties(weild_module_tests PROPERTIES TIMEOUT 30)
 #endif()
+option(BUILD_LS2_TESTS "Build the LS2D UDP loopback tests" OFF)
+if(BUILD_LS2_TESTS)
+    enable_testing()
+    find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Test)
+    add_executable(camerals2_tests tests/camerals2_tests.cpp apcamera/icamera.h apcamera/camerals2.h apcamera/camerals2.cpp)
+    target_include_directories(camerals2_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+    target_link_libraries(camerals2_tests PRIVATE Qt${QT_VERSION_MAJOR}::Network Qt${QT_VERSION_MAJOR}::Test opencv_core)
+    add_test(NAME camerals2_loopback COMMAND camerals2_tests)
+    set_tests_properties(camerals2_loopback PROPERTIES TIMEOUT 20)
+endif()
+
 include(GNUInstallDirs)
 install(TARGETS WeildScanner BUNDLE DESTINATION . LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})

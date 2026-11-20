@@ -4,13 +4,15 @@
 #include <QDoubleSpinBox>
 #include <QLabel>
 #include <vector>
-#include "apcamera/cameraopencv.h"
 #include "weild_processor/weildprocessingpool.h"
 #include "weild_processor/weildrobotoutput.h"
 
 QT_BEGIN_NAMESPACE
 namespace Ui { class MainWindow; }
 QT_END_NAMESPACE
+
+class ICamera;
+class LogTerminal;
 
 class MainWindow : public QMainWindow
 {
@@ -21,14 +23,16 @@ public:
     void showEvent(QShowEvent *event) override;
     void closeEvent(QCloseEvent *event) override;
 public slots:
+    void switchToLS2();
     void switchToDefCamera();
     void switchToCamera_0(bool on);
     void switchToCamera_1(bool on);
     void switchToCamera_2(bool on);
     void switchToCamera_3(bool on);
 private:
+    enum class CameraBackend { OpenCv, LS2 };
     Ui::MainWindow *ui;
-    CameraOpenCv *m_camera=nullptr;
+    ICamera *m_camera=nullptr;
     WeildProcessingPool *m_weildPool=nullptr;
     WeildRobotOutput *m_robotOutput=nullptr;
     LogTerminal *m_hwTerm=nullptr;
@@ -48,5 +52,6 @@ private:
     void fillParameters();
     void showMeasurement(WeildDetect::Result result);
     void report(const QString &message);
-    void configureSource(bool synthetic);
+    void setCamera(ICamera *camera);
+    void configureSource(bool synthetic, CameraBackend backend = CameraBackend::OpenCv);
 };

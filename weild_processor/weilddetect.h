@@ -15,12 +15,13 @@ class WeildDetect
 {
 public:
     struct Parameters {
-        cv::Rect roi;                 // Empty = whole image; columns cross the seam.
+        cv::Rect target_rect;         // Обрабатываемая область изображения
         double minSignal = 18;        //Интенсивность с вычетом фонового сигнала, 8бит
         int backgroundWindow = 31;    // Vertical top-hat kernel, odd.
         int maxLineWidth = 12;
-        int maxSaturatedWidth = 5;
+        double maxSaturatedWidth = 5;
         double maxPixelJump = 12;
+
         int minPoints = 40;
         double minCoverage = 0.55;
         double workingDistance = 200; //расстояние до камеры по оси Z
@@ -59,21 +60,19 @@ public:
     struct Result {
         quint64 frameId = 0;
         quint64 generation = 0;
-        //qint64 timestampMs = 0;       // steady_clock, local monotonic clock.
         bool detected = false;        // Флаг наличия шва  в теуцшем фрейме
-        bool predicted = false;       // Tracker prediction, not a measured path point.
-        bool robotValid = false;
+        bool predicted = false;
         QString diagnostic;
         double quality = 0;
         double width = 0, depth = 0, angle = 0;
         double processingMs = 0;      //время обработки кадра (мс)
-        cv::Point3d centerCamera;
+        cv::Point3d centerCamera;             // Центр камеры C = R^t
         cv::Point3d trackedCamera;
         cv::Point3d centerRobot;
         cv::Point3d leftShoulder, rightShoulder;
-        std::vector<cv::Point2f> laserPixels;
-        std::vector<cv::Point3d> profile;
-        cv::Mat overlay;              // Исходный кадр без разметки; разделяемое владение, только чтение.
+        std::vector<cv::Point2f> laserPixels; // Пиксели лазера
+        std::vector<cv::Point3d> profile;     // Профиль шва
+        cv::Mat overlay;                      // Исходный кадр без разметки (только чтение).
     };
 
     explicit WeildDetect(const Parameters &parameters, const Calibration &calibration);
