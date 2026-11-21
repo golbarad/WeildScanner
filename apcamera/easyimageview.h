@@ -22,22 +22,27 @@ public:
 signals:
 
 public slots:
-    //сделать копию картинки и отобразим ее
+    // Отображение фрейма
     void updateImage(cv::Mat mat);
     void updateResult(const WeildDetect::Result &result);
     //void updateFaces(QVector<FACE_INFO> *faces);
 
 protected:
-    virtual void paintEvent(QPaintEvent *event);
+    void paintEvent(QPaintEvent *event) override;
 
-    // Заголовок изображения; данные удерживаются в m_matBgr.
-    QImage m_imageHdr;
-    // Mono8 хранится без преобразования; цветной кадр преобразуется при рисовании.
-    cv::Mat m_matBgr;
+private:
+    struct RenderFrame {
+        cv::Mat pixels;
+        QImage image;
+        void setPixels(const cv::Mat &mat);
+    };
+    void drawOverlay(RenderFrame &frame, QPainter &painter, const QRect &imageRect) const;
+    RenderFrame m_leftFrame, m_rightFrame;
 
-    // GUI-thread mailbox: a new result replaces the previous unpainted frame.
-    cv::Mat m_pendingImage;
+    // Текущий фрейм
+    FrameSynchronizer::DualFrame m_pendingFrames;
     std::vector<cv::Point2f> m_laserPixels;
+    std::vector<cv::Point2d> m_landmarkPixels;
     QString m_status;
     bool m_detected = false;
     bool m_imageDirty = false;

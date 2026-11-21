@@ -34,6 +34,7 @@ set(PROJECT_SOURCES
     main.cpp mainwindow.cpp mainwindow.h mainwindow.ui appstructs.cpp appstructs.h
     apcamera/easyimageview.cpp apcamera/easyimageview.h
     weild_processor/weildprofileview.cpp weild_processor/weildprofileview.h
+    weild_processor/framesynchronizer.h weild_processor/framesynchronizer.cpp
     weild_processor/weilddetect.h weild_processor/weilddetect.cpp weild_processor/weildparameters.cpp
     weild_processor/weildtracker.h weild_processor/weildtracker.cpp
     weild_processor/weildsynthetic.h weild_processor/weildsynthetic.cpp
@@ -70,6 +71,20 @@ endif()
     #add_test(NAME weild_module_tests COMMAND weild_tests)
     #set_tests_properties(weild_module_tests PROPERTIES TIMEOUT 30)
 #endif()
+option(BUILD_OVERLAY_TESTS "Build the dual-frame overlay tests" OFF)
+if(BUILD_OVERLAY_TESTS)
+    enable_testing()
+    find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Test)
+    add_executable(dualframe_tests tests/dualframe_tests.cpp apcamera/easyimageview.cpp
+        weild_processor/weilddetect.cpp weild_processor/weildsynthetic.cpp
+        weild_processor/weildprocessingpool.cpp weild_processor/frameweildprocessing.cpp
+        weild_processor/weildtracker.cpp weild_processor/weildrobotoutput.cpp)
+    target_include_directories(dualframe_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/apcamera)
+    target_link_libraries(dualframe_tests PRIVATE Qt${QT_VERSION_MAJOR}::Widgets Qt${QT_VERSION_MAJOR}::Test opencv_calib3d)
+    add_test(NAME dualframe_overlay COMMAND dualframe_tests -platform offscreen)
+    set_tests_properties(dualframe_overlay PROPERTIES TIMEOUT 20)
+endif()
+
 option(BUILD_LS2_TESTS "Build the LS2D UDP loopback tests" OFF)
 if(BUILD_LS2_TESTS)
     enable_testing()

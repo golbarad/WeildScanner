@@ -37,12 +37,13 @@ public:
     bool startRecording(const QString &fileName);
     void stopRecording();
     void reset();
-    // Потокобезопасный входной интерфейс; connect сигнала захвата через Qt::DirectConnection.
-    // Возвращает копию; хранит не более одного новейшего ожидающего кадра.
+
+    // Запуск обработки фрейма, возвращает копию захваченного кадра;
+    // (работает в потоке камеры (соединеяется через DirectConnection))
     void submitFrame(const cv::Mat &image, qint64 timestampNs);
 
 signals:
-    void imageProcessed(cv::Mat image);
+    void imageProcessed(FrameSynchronizer::DualFrame frames);
     void measurementReady(WeildDetect::Result result);
     void diagnostic(QString message);
 
@@ -78,12 +79,12 @@ private:
 
     QFile m_recording;
     QTimer m_watchdog;
-    cv::Mat m_lastOverlay;
+    FrameSynchronizer::DualFrame m_lastOverlay;
     bool m_lostNotified=false;
 
     //слот завшения обработки кадра
     void weildProceed(int index, WeildDetect::Result result);
-    //оправка резальтатата обработки
+    // Добавляем захваченный результат в пул обрабочиков
     void sendResult();
     void deliver(WeildDetect::Result result);
     void checkTimeout();

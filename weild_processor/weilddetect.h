@@ -2,7 +2,7 @@
 
 #include <QString>
 #include <QMetaType>
-#include "cvmetatypes.h"
+#include "framesynchronizer.h"
 #include <opencv2/opencv.hpp>
 #include <vector>
 
@@ -71,8 +71,9 @@ public:
         cv::Point3d centerRobot;
         cv::Point3d leftShoulder, rightShoulder;
         std::vector<cv::Point2f> laserPixels; // Пиксели лазера
+        std::vector<cv::Point2d> landmarkPixels;
         std::vector<cv::Point3d> profile;     // Профиль шва
-        cv::Mat overlay;                      // Исходный кадр без разметки (только чтение).
+        FrameSynchronizer::DualFrame overlay; // Исходные кадры без разметки (только чтение).
     };
 
     explicit WeildDetect(const Parameters &parameters, const Calibration &calibration);
@@ -81,13 +82,13 @@ public:
                    QString *error = nullptr);
     const Parameters &parameters() const { return m_parameters; }
     const Calibration &calibration() const { return m_calibration; }
-    //хендлер обработки кадра
+    // хендлер обработки кадра
     Result process(const cv::Mat &image, quint64 frameId, qint64 timestampNs) const;
 
 private:
     Parameters m_parameters;
     Calibration m_calibration;
-    //детектирование линии
+    // детектирование линии
     std::vector<cv::Point2f> extractLine(const cv::Mat &gray) const;
     bool triangulate(Result &result, cv::Size imageSize) const;
     bool findGroove(Result &result) const;

@@ -22,7 +22,7 @@ WeildDetect::Result WeildTracker::predict(qint64 timestamp, const WeildDetect::P
     out.trackedCamera=m_position+m_velocity*((timestamp-m_stateTime)*1e-9);
     out.quality=m_lastMeasurement.quality*std::max(0.,1.-gap/p.predictionSeconds);
     out.diagnostic="Predicted";
-    out.laserPixels.clear(); out.profile.clear();
+    out.laserPixels.clear(); out.landmarkPixels.clear(); out.profile.clear();
     return out;
 }
 
@@ -56,6 +56,7 @@ WeildDetect::Result WeildTracker::update(WeildDetect::Result r, const WeildDetec
     auto out=predict(0,/*r.timestampNs*/p);
     out.frameId=r.frameId; out.generation=r.generation;
     out.overlay=r.overlay; out.laserPixels=r.laserPixels; out.profile=r.profile;
+    out.landmarkPixels=r.landmarkPixels;
     out.processingMs=r.processingMs;
     if (rejected) out.diagnostic += ": tracking jump rejected";
     else if (!r.diagnostic.isEmpty()) out.diagnostic += ": " + r.diagnostic;

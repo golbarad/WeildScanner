@@ -7,6 +7,7 @@
 WeildProcessingPool::WeildProcessingPool(QObject *parent) : QObject(parent)
 {
     qRegisterMetaType<WeildDetect::Result>();
+    qRegisterMetaType<FrameSynchronizer::DualFrame>();
 
     //создаем и настраиваем определителели сварного шва
     for (int i=0; i<WorkerCount; ++i) {
@@ -52,7 +53,7 @@ void WeildProcessingPool::reset()
         ++m_generation; m_pending={};
     }
     m_tracker.reset(); m_path.clear(); m_lastAccepted=0; m_lastTimestamp=0;
-    m_lastOverlay.release(); m_lostNotified=false;
+    m_lastOverlay={}; m_lostNotified=false;
     WeildDetect::Result cleared;
     //cleared.timestampNs=WeildDetect::monotonicNs();
     cleared.generation=m_generation;
@@ -86,6 +87,7 @@ void WeildProcessingPool::sendResult()
     const auto p=m_parameters;
     const auto c=m_calibration.clone();
     auto *processor=w.processor;
+    // Запускаем обработку
     QMetaObject::invokeMethod(processor,
         [processor,pending,p,c]{
             processor->processFrame(pending.image,pending.id,pending.timestamp,pending.generation,p,c);
@@ -93,11 +95,13 @@ void WeildProcessingPool::sendResult()
 }
 
 void WeildProcessingPool::submitFrame(const cv::Mat &image, qint64 timestamp)
-{
-    //if (image.empty() || timestamp<=0 || timestamp>WeildDetect::monotonicNs()) return;
+{    
     QMutexLocker lock(&m_mutex);
     if (m_stopping) return;
-    if (!m_pending.image.empty()) ++m_dropped;
+    // Если не обработали последний захваченный кадр - увеличим число дропов
+    if (!m_pending.image.empty())
+        ++m_dropped;
+    // Копируем текущее изображение
     m_pending={image.clone(),++m_nextFrame,m_generation,timestamp};
     if (!m_sendingScheduled) {
         m_sendingScheduled=true;
@@ -127,10 +131,11 @@ void WeildProcessingPool::weildProceed(int index, WeildDetect::Result result)
 void WeildProcessingPool::checkTimeout()
 {
     const auto now=0; //WeildDetect::monotonicNs();
-    // Wait the complete acceptable processing latency before predicting without frames.
+    // Ограничиваем ожидание результата
     if (!m_lastTimestamp || (now-m_lastTimestamp)*1e-9 <= m_parameters.maxResultAge || m_lostNotified) return;
     auto result=m_tracker.predict(now,m_parameters);
-    m_lastTimestamp=now; // Future completions older than this published prediction are stale.
+    // Future completions older than this published prediction are stale.
+    m_lastTimestamp=now;
     result.frameId=m_lastAccepted; result.generation=m_generation;
     result.overlay=m_lastOverlay;
     if (!result.predicted) m_lostNotified=true;
@@ -149,7 +154,7 @@ void WeildProcessingPool::deliver(WeildDetect::Result r)
     }
     if (r.detected) {
         m_path.push_back({r.frameId,/*r.timestampNs*/ 0,r.centerCamera,r.trackedCamera,
-             r.centerRobot,r.width,r.depth,r.angle,r.quality}
+            r.centerRobot,r.width,r.depth,r.angle,r.quality}
         );
         while (m_path.size()>size_t(m_parameters.maxPathPoints)) m_path.pop_front();
     }
@@ -179,7 +184,6 @@ bool WeildProcessingPool::startRecording(const QString &name)
 {
     stopRecording();
     m_recording.setFileName(name);
-    // Never silently overwrite earlier measurements.
     if (!m_recording.open(QIODevice::WriteOnly|QIODevice::Append|QIODevice::Text)) {
         emit diagnostic(m_recording.errorString()); return false;
     }

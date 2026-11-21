@@ -8,6 +8,7 @@
 #include <stdexcept>
 
 namespace {
+
 bool fail(QString *error, const QString &message) {
     if (error) *error = message;
     return false;
@@ -85,11 +86,16 @@ bool WeildDetect::Calibration::valid(QString *error) const
         (distortion.total() != 4 && distortion.total() != 5 && distortion.total() != 8 &&
          distortion.total() != 12 && distortion.total() != 14)))
         return fail(error, "Invalid distortion coefficients");
-    for (double v : laserPlane.val) if (!isFinite(v)) return fail(error, "Invalid laser plane");
+
+    for (double v : laserPlane.val) {
+        if (!isFinite(v)) return fail(error, "Invalid laser plane");
+    }
     const double normalLength=cv::norm(cv::Vec3d(laserPlane[0], laserPlane[1], laserPlane[2]));
     if (!isFinite(normalLength) || normalLength < 1e-9 ||
         std::abs(laserPlane[3]) < 1e-9) return fail(error, "Laser plane is missing or passes through camera");
-    if (robotTransformValid) {
+
+    if (robotTransformValid)
+    {
         cv::Mat transform(cameraToRobot);
         if (!cv::checkRange(transform)) return fail(error, "Invalid robot transform");
         for (int j=0; j<4; ++j)
@@ -253,17 +259,20 @@ bool WeildDetect::triangulate(Result &r, cv::Size size) const
     if (!m_calibration.valid(&error)) return fail(&r.diagnostic, error);
     if (size != m_calibration.imageSize)
         return fail(&r.diagnostic, "Frame size does not match calibration");
+
     std::vector<cv::Point2f> rays;
     cv::undistortPoints(r.laserPixels, rays, m_calibration.cameraMatrix, m_calibration.distortion);
     const auto plane = m_calibration.laserPlane;
     const cv::Vec3d normal(plane[0],plane[1],plane[2]);
-    for (auto pixel : rays) {
+    for (auto pixel : rays)
+    {
         const cv::Vec3d ray(pixel.x,pixel.y,1);
         const double denominator = normal.dot(ray);
         if (std::abs(denominator) < 1e-8*cv::norm(normal)*cv::norm(ray)) continue;
         const double scale = -plane[3]/denominator;
         if (!isFinite(scale) || scale <= 0 ||
-            std::abs(scale-m_parameters.workingDistance) > m_parameters.distanceTolerance) continue;
+            std::abs(scale-m_parameters.workingDistance) > m_parameters.distanceTolerance)
+            continue;
         r.profile.push_back(point(ray*scale));
     }
     if (r.profile.size() < size_t(m_parameters.minPoints))
@@ -278,14 +287,17 @@ bool WeildDetect::findGroove(Result &r) const
     const double length = cv::norm(normal);
     normal /= length;
     cv::Vec3d u = cv::Vec3d(1,0,0) - normal*normal[0];
-    if (cv::norm(u) < 0.1) return fail(&r.diagnostic, "Laser plane cannot be profiled along image columns");
+    if (cv::norm(u) < 0.1)
+        return fail(&r.diagnostic, "Laser plane cannot be profiled along image columns");
     u /= cv::norm(u);
     cv::Vec3d v = normal.cross(u);
     if (v[2] < 0) v = -v;
-    if (std::abs(v[2]) < 0.05) return fail(&r.diagnostic, "Laser plane has insufficient depth sensitivity");
+    if (std::abs(v[2]) < 0.05)
+        return fail(&r.diagnostic, "Laser plane has insufficient depth sensitivity");
     const cv::Vec3d origin = normal*(-m_calibration.laserPlane[3]/length);
     std::vector<cv::Point2d> points;
-    for (auto xyz : r.profile) {
+    for (auto xyz : r.profile)
+    {
         cv::Vec3d delta = cv::Vec3d(xyz.x,xyz.y,xyz.z)-origin;
         points.emplace_back(delta.dot(u), delta.dot(v));
     }
@@ -296,12 +308,14 @@ bool WeildDetect::findGroove(Result &r) const
     const size_t edge = std::max(size_t(6), points.size()/6);
     std::vector<cv::Point2d> surface(points.begin(),points.begin()+edge);
     surface.insert(surface.end(), points.end()-edge, points.end());
+
     Line baseline;
     if (!fit(surface,baseline) || baseline.error > p.maxFitError)
         return fail(&r.diagnostic, "Surface is not visible on both sides");
     std::vector<double> depths;
     const double baselineNorm = std::hypot(1.,baseline.a);
     for (auto xy : points) depths.push_back((xy.y-baseline.a*xy.x-baseline.b)/baselineNorm);
+
     // Median depth rejects a single isolated spike when locating the root.
     std::vector<double> smoothDepth = depths;
     for (size_t i=2; i+2<depths.size(); ++i)
@@ -311,7 +325,8 @@ bool WeildDetect::findGroove(Result &r) const
     if (peak < edge || peak+edge >= points.size() || peakDepth < p.minDepth || peakDepth > p.maxDepth)
         return fail(&r.diagnostic, "No admissible V groove");
     std::vector<cv::Point2d> left, right;
-    for (size_t i=edge; i+edge<points.size(); ++i) {
+    for (size_t i=edge; i+edge<points.size(); ++i)
+    {
         if (depths[i] < std::max(peakDepth*.15, p.maxFitError) || depths[i] > peakDepth*.9) continue;
         (i<peak ? left : right).push_back(points[i]);
     }
@@ -319,6 +334,7 @@ bool WeildDetect::findGroove(Result &r) const
     if (!fit(left,l) || !fit(right,rr) || l.error > p.maxFitError || rr.error > p.maxFitError ||
         l.a <= baseline.a+0.05 || rr.a >= baseline.a-0.05)
         return fail(&r.diagnostic, "V flanks could not be fitted reliably");
+
     const double xLeft = (baseline.b-l.b)/(l.a-baseline.a);
     const double xRight = (baseline.b-rr.b)/(rr.a-baseline.a);
     const double xRoot = (rr.b-l.b)/(l.a-rr.a);
@@ -327,11 +343,12 @@ bool WeildDetect::findGroove(Result &r) const
     cv::Point2d root(xRoot, l.a*xRoot+l.b);
     if (!(points.front().x < xLeft && xLeft < xRoot && xRoot < xRight && xRight < points.back().x))
         return fail(&r.diagnostic, "Groove shoulders outside visible profile");
+
     const double depth = (root.y-baseline.a*root.x-baseline.b)/baselineNorm;
     const double width = cv::norm(b-a);
     const auto vl = a-root, vr = b-root;
     const double angle = std::acos(std::clamp(vl.dot(vr)/(cv::norm(vl)*cv::norm(vr)),-1.,1.))*180/CV_PI;
-    // Validate the complete four-segment model, not only points selected for fitting.
+    // Валидация четрехсегментой модели
     int inliers = 0;
     double squaredError = 0;
     for (auto xy : points) {
@@ -345,9 +362,14 @@ bool WeildDetect::findGroove(Result &r) const
     if (width < p.minWidth || width > p.maxWidth || depth < p.minDepth || depth > p.maxDepth ||
         angle < p.minAngle || angle > p.maxAngle || inlierFraction < .85 || rmse > 2*p.maxFitError)
         return fail(&r.diagnostic, "Groove geometry or residual outside limits");
+
     r.quality *= inlierFraction * std::exp(-rmse/(3*p.maxFitError));
-    if (r.quality < p.minQuality) return fail(&r.diagnostic, "Low measurement quality");
-    auto xyz = [&](cv::Point2d xy) {return point(origin+u*xy.x+v*xy.y);};
+    if (r.quality < p.minQuality)
+        return fail(&r.diagnostic, "Low measurement quality");
+
+    auto xyz = [&](cv::Point2d xy) {
+        return point(origin+u*xy.x+v*xy.y);
+    };
     r.centerCamera = xyz(root);
     r.trackedCamera = r.centerCamera;
     r.leftShoulder = xyz(a);
@@ -358,6 +380,7 @@ bool WeildDetect::findGroove(Result &r) const
     return true;
 }
 
+// Обработка захваченного кадра
 WeildDetect::Result WeildDetect::process(const cv::Mat &image, quint64 id, qint64 timestamp) const
 {
     Result r;
@@ -372,9 +395,12 @@ WeildDetect::Result WeildDetect::process(const cv::Mat &image, quint64 id, qint6
             cv::Mat gray;
             if (image.channels()==1) gray=image;
             else cv::cvtColor(image,gray,image.channels()==3 ? cv::COLOR_BGR2GRAY : cv::COLOR_BGRA2GRAY);
-            // Копируем ссылку на текущий кадра
-            r.overlay = image;
+            // Копируем ссылку на текущий фрейм
+            // (сейчас для теста левый и правый фрейм ссылаютсся на один и тот же кадр)
+            r.overlay.left_frame = image;
+            r.overlay.right_frame = image;
             r.laserPixels = extractLine(gray);
+            // Захватываемя область
             cv::Rect roi=m_parameters.target_rect.empty() ? cv::Rect(0,0,gray.cols,gray.rows) :
                 m_parameters.target_rect & cv::Rect(0,0,gray.cols,gray.rows);
             r.quality = roi.width > 0 ? double(r.laserPixels.size())/roi.width : 0;
@@ -385,9 +411,8 @@ WeildDetect::Result WeildDetect::process(const cv::Mat &image, quint64 id, qint6
                 r.quality *= double(r.profile.size())/r.laserPixels.size();
                 if (findGroove(r)) {
                     std::vector<cv::Point3d> xyz{r.leftShoulder,r.centerCamera,r.rightShoulder};
-                    std::vector<cv::Point2d> pixels;
-                    cv::projectPoints(xyz,cv::Vec3d(),cv::Vec3d(),m_calibration.cameraMatrix,m_calibration.distortion,pixels);
-                    for (auto pixel : pixels) cv::circle(r.overlay,pixel,5,cv::Scalar(0,180,255),2);
+                    cv::projectPoints(xyz,cv::Vec3d(),cv::Vec3d(),m_calibration.cameraMatrix,
+                        m_calibration.distortion,r.landmarkPixels);
                 }
             }
         }
